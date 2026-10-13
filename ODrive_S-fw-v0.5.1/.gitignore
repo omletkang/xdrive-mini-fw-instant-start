@@ -32,7 +32,7 @@ target/
 
 # Tup
 .tup
-tup.config
+# tup.config is tracked: it selects the board (v3.6-56V) needed to build
 
 # Sphinx documentation
 /docs/_build/
