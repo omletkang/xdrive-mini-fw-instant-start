@@ -97,9 +97,13 @@ void Encoder::update_pll_gains() {
 
 void Encoder::check_pre_calibrated() {
     // TODO: restoring config from python backup is fragile here (ACIM motor type must be set first)
-    if (!is_ready_ && axis_->motor_.config_.motor_type != Motor::MOTOR_TYPE_ACIM)
+    // Absolute encoders are exempt: their offset stays valid across power cycles, so
+    // pre_calibrated may be set (e.g. from a saved offset) without re-running calibration.
+    if (!is_ready_ && axis_->motor_.config_.motor_type != Motor::MOTOR_TYPE_ACIM && !(config_.mode & MODE_FLAG_ABS))
         config_.pre_calibrated = false;
-    if (mode_ == MODE_INCREMENTAL && !index_found_)
+    // Use config_.mode, not mode_: mode_ is only refreshed in setup() at boot and can be
+    // stale if the encoder mode was changed in this session.
+    if (config_.mode == MODE_INCREMENTAL && !index_found_)
         config_.pre_calibrated = false;
 }
 
@@ -351,8 +355,9 @@ bool Encoder::abs_spi_start_transaction(){
     if (mode_ & MODE_FLAG_ABS){
         axis_->motor_.log_timing(TIMING_LOG_SPI_START);
         if(hw_config_.spi->State != HAL_SPI_STATE_READY){
-            set_error(ERROR_ABS_SPI_NOT_READY);
-            return false;
+            // SPI still busy: skip this cycle instead of raising ERROR_ABS_SPI_NOT_READY.
+            // Sustained failures are still caught by spi_error_rate_ in update().
+            return true;
         }
         HAL_GPIO_WritePin(abs_spi_cs_port_, abs_spi_cs_pin_, GPIO_PIN_RESET);
         HAL_SPI_TransmitReceive_DMA(hw_config_.spi, (uint8_t*)abs_spi_dma_tx_, (uint8_t*)abs_spi_dma_rx_, 1);
@@ -415,6 +420,23 @@ void Encoder::abs_spi_cb(){
     pos_abs_ = pos;
     abs_spi_pos_updated_ = true;
     if (config_.pre_calibrated) {
+        if (!pos_estimate_valid_) {
+            // Seed the PLL with the absolute position so the axis can start at any
+            // angle (otherwise the estimate starts at 0 and the PLL has to slew to
+            // the real position, causing a jump / velocity spike at startup).
+            // Re-seed PLL on every callback until encoder.update() takes over.
+            // This guards against the AMS encoder returning a wrong value on its
+            // first SPI read after power-on: by the time the control thread starts
+            // (1500 ms later) the encoder has settled, so the seed is always fresh.
+            // encoder.update() sets pos_estimate_valid_ = true to stop re-seeding.
+            count_in_cpr_ = (int32_t)pos;
+            pos_cpr_counts_ = (float)pos;
+            shadow_count_ = (int32_t)pos;
+            pos_estimate_counts_ = (float)pos;
+            pos_estimate_ = (float)pos / (float)config_.cpr;
+            vel_estimate_counts_ = 0.0f;
+            vel_estimate_ = 0.0f;
+        }
         is_ready_ = true;
     }
 }
