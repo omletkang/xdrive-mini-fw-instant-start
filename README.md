@@ -1,6 +1,6 @@
 # xdrive-mini-fw-instant-start
 
-Modified ODrive v0.5.1 firmware for the **XDrive MINI** (an ODrive v3.6 compatible board by Makerbase/MKS), using the board's built-in **AS5047P** absolute encoder (no external encoder needed).
+Modified ODrive v0.5.1 firmware for the **XDrive MINI** (an ODrive v3.6 compatible board by Makerbase/MKS), using the board's built-in **AS5047P** absolute encoder.
 
 With this firmware the drive:
 
