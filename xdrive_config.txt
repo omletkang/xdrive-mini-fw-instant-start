@@ -1,0 +1,81 @@
+# XDrive MINI configuration used with this firmware (axis0, onboard AS5047P encoder).
+# Motor values are for the MAD M6C12 150KV; comments marked "5010" give the values
+# used for the MAD 5010 110KV.
+# Run these commands one by one in odrivetool.
+# Adjust the voltage/current limits, motor and controller values to your own setup.
+
+odrv0.erase_configuration()
+# wait a bit (the board reboots), then reconnect
+
+#### 1. Mainboard parameter configuration ####
+odrv0.config.brake_resistance = 0.0
+odrv0.config.dc_bus_undervoltage_trip_level = 21.0
+odrv0.config.dc_bus_overvoltage_trip_level = 26
+odrv0.config.dc_max_positive_current = 12.0
+odrv0.config.dc_max_negative_current = -3.0
+odrv0.config.max_regen_current = 0
+odrv0.save_configuration()
+
+#### 2. Motor parameter configuration ####
+odrv0.axis0.motor.config.pole_pairs = 14
+odrv0.axis0.motor.config.calibration_current = 5
+odrv0.axis0.motor.config.resistance_calib_max_voltage = 2
+odrv0.axis0.motor.config.motor_type = MOTOR_TYPE_HIGH_CURRENT
+odrv0.axis0.motor.config.current_lim = 18
+odrv0.axis0.motor.config.requested_current_range = 25
+odrv0.axis0.motor.config.torque_constant = 0.067 # 5010= 0.0836
+odrv0.save_configuration()
+
+#### 3. Encoder parameter configuration ####
+odrv0.axis0.encoder.config.mode = ENCODER_MODE_SPI_ABS_AMS
+odrv0.axis0.encoder.config.abs_spi_cs_gpio_pin = 7
+odrv0.axis0.encoder.config.cpr = 16384
+odrv0.axis0.encoder.config.bandwidth = 3000
+odrv0.axis0.encoder.config.calib_range = 10
+odrv0.save_configuration()
+
+#### 4. Controller parameter configuration ####
+odrv0.axis0.controller.config.control_mode = CONTROL_MODE_POSITION_CONTROL
+odrv0.axis0.controller.config.vel_limit = 50 # old: 20
+odrv0.axis0.controller.config.pos_gain = 12.6 # 5010 = 20
+odrv0.axis0.controller.config.vel_gain = 0.223 # 5010 = 0.1
+odrv0.axis0.controller.config.vel_integrator_gain = 0.0
+odrv0.axis0.controller.config.input_mode = INPUT_MODE_TRAP_TRAJ
+odrv0.axis0.trap_traj.config.vel_limit = 10
+odrv0.axis0.trap_traj.config.accel_limit = 5
+odrv0.axis0.trap_traj.config.decel_limit = 5
+odrv0.save_configuration()
+odrv0.reboot()
+
+#### Test parameter configuration ####
+# One-time calibration. After this the drive starts without calibrating.
+odrv0.axis0.requested_state = AXIS_STATE_MOTOR_CALIBRATION
+# wait until it finishes (beep), check dump_errors(odrv0)
+odrv0.axis0.motor.config.pre_calibrated = True
+odrv0.axis0.requested_state = AXIS_STATE_ENCODER_OFFSET_CALIBRATION
+# wait until the motor stops turning, check dump_errors(odrv0)
+odrv0.axis0.encoder.config.pre_calibrated = True
+odrv0.save_configuration()
+odrv0.reboot()
+
+#### Motor control test ####
+odrv0.axis0.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+odrv0.axis0.controller.input_pos = 1
+odrv0.axis0.controller.input_pos = 0
+odrv0.axis0.controller.input_pos = 0.5
+odrv0.axis0.requested_state = AXIS_STATE_IDLE
+
+#### CAN configuration ####
+odrv0.axis0.config.can_node_id = 23
+odrv0.can.set_baud_rate(500000)
+odrv0.axis1.config.can_node_id = 63
+odrv0.save_configuration()
+
+#### Motor control test ####
+# Start from any position: move relative to wherever the rotor is now
+odrv0.axis0.controller.config.input_mode = INPUT_MODE_PASSTHROUGH
+odrv0.save_configuration()
+odrv0.reboot()
+odrv0.axis0.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+odrv0.axis0.controller.input_pos = odrv0.axis0.encoder.pos_estimate + 0.2
+odrv0.axis0.controller.input_pos = odrv0.axis0.encoder.pos_estimate - 0.2
